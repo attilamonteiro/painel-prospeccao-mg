@@ -15,6 +15,7 @@ PNCP /contratacoes/publicacao?uf=MG  ──>  transform  ──>  (BrasilAPI: co
 | `pncp-mg-crawler.workflow.json` | **Workflow do n8n** — importe este arquivo. |
 | `lib/transform.mjs` | Transformação pura PNCP → linhas (fonte da verdade). |
 | `dry-run.mjs` | Testa coleta+transform contra o PNCP **sem escrever** no banco. |
+| `seed.mjs` | **Popula o Supabase sem n8n** — coleta+transform+upsert em 1 comando. |
 | `build.mjs` | Regera o `.workflow.json` a partir do `transform.mjs`. |
 
 ## Pré-requisitos
@@ -22,6 +23,20 @@ PNCP /contratacoes/publicacao?uf=MG  ──>  transform  ──>  (BrasilAPI: co
 1. **Schema aplicado** no Supabase (`supabase/migrations/0001_init_rpc_schema.sql`) —
    ainda é o blocker T0. Sem as tabelas `orgaos`/`contratos`, o upsert falha com 404.
 2. **`service_role`** do projeto (Dashboard → Settings → API). Nunca vai no Git.
+
+## Sem n8n — seed direto (forma mais rápida)
+
+Pré-requisitos: schema aplicado (T0) + a `service_role` no ambiente (NUNCA commitada — você cola no seu terminal).
+
+```powershell
+# PowerShell, em C:\Users\atmal\painel-prospeccao-mg
+$env:SUPABASE_SERVICE_ROLE_KEY = 'cole_a_service_role_aqui'
+node n8n/seed.mjs                                        # 90 dias, modalidades 6 e 8
+$env:DIAS='90'; $env:MODALIDADES='6,8,4'; node n8n/seed.mjs
+```
+
+Saída: `{ contratacoes_coletadas, orgaos_upsertados, contratos_upsertados }`.
+Re-rodar **não duplica** (upsert por `cnpj` / `numero_controle_pncp`). Teste antes sem escrever: `node n8n/dry-run.mjs`.
 
 ## Como usar no n8n
 
