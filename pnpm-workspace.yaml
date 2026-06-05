@@ -1,0 +1,5 @@
+# Permitir build scripts nativos.
+# sharp = otimização de imagem do Next; unrs-resolver = resolver do eslint-config-next
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
