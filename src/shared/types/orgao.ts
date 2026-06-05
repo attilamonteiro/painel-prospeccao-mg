@@ -1,33 +1,14 @@
 /**
  * Types for Orgao (Public Agency) domain
+ * Response types are derived from Zod schemas to eliminate drift.
+ * Input filter types (OrgaoFilters) remain as manual interfaces.
  */
 
-export interface Orgao {
-  id: number;
-  cnpj: string;
-  razao_social: string;
-  nome_fantasia: string;
-  esfera: 'MUNICIPAL' | 'ESTADUAL' | 'FEDERAL';
-  poder: string;
-  uf: string;
-  municipio: string;
-  codigo_ibge: string;
-  site_oficial: string | null;
-  email_geral: string | null;
-  email_licitacoes: string | null;
-  telefone: string | null;
-  endereco: string | null;
-  cep: string | null;
-  nome_responsavel: string | null;
-  cargo_responsavel: string | null;
-  email_responsavel: string | null;
-  total_contratos: number;
-  valor_total_contratos: number;
-  ultimo_contrato_em: string | null;
-  categorias_compra: string[];
-  criado_em: string;
-  atualizado_em: string;
-}
+import type { z } from 'zod';
+import type { OrgaoSchema, OrgaoExportSchema } from '@/shared/schemas/orgao';
+
+export type Orgao = z.infer<typeof OrgaoSchema>;
+export type OrgaoExport = z.infer<typeof OrgaoExportSchema>;
 
 export interface OrgaoFilters {
   p_search?: string;
@@ -40,24 +21,4 @@ export interface OrgaoFilters {
   p_page_size: number;
   p_order_by: string;
   p_order_dir: 'asc' | 'desc';
-}
-
-export interface OrgaoExport {
-  municipio: string;
-  uf: string;
-  razao_social: string;
-  nome_fantasia: string;
-  esfera: string;
-  cnpj: string;
-  email_geral: string | null;
-  email_licitacoes: string | null;
-  telefone: string | null;
-  site_oficial: string | null;
-  nome_responsavel: string | null;
-  cargo_responsavel: string | null;
-  email_responsavel: string | null;
-  total_contratos: number;
-  valor_total_contratos: number;
-  ultimo_contrato_em: string | null;
-  categorias: string[];
 }

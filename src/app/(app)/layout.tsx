@@ -1,7 +1,18 @@
-import type { ReactNode } from "react";
-import { Sidebar } from "@/shared/components/Sidebar";
+import type { ReactNode } from 'react';
+import { redirect } from 'next/navigation';
+import { Sidebar } from '@/shared/components/Sidebar';
+import { createClient } from '@/shared/lib/supabase/server';
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar />

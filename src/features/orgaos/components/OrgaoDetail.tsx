@@ -216,9 +216,9 @@ export function OrgaoDetail({ cnpj, open, onClose }: OrgaoDetailProps) {
                   )}
                 </dl>
 
-                {orgao.categorias_compra.length > 0 && (
+                {(orgao.categorias_compra ?? []).length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {orgao.categorias_compra.map((cat) => (
+                    {(orgao.categorias_compra ?? []).map((cat) => (
                       <Badge key={cat} variant="outline" className="text-xs">
                         {cat}
                       </Badge>
@@ -242,16 +242,18 @@ export function OrgaoDetail({ cnpj, open, onClose }: OrgaoDetailProps) {
                         >
                           <p className="font-medium leading-snug">{c.objeto}</p>
                           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            <span>{c.modalidade}</span>
-                            <span>{c.categoria}</span>
+                            {c.modalidade && <span>{c.modalidade}</span>}
+                            {c.categoria && <span>{c.categoria}</span>}
                             <span>{formatBRL(c.valor_final)}</span>
                             {c.data_assinatura && (
                               <span>{formatDate(c.data_assinatura)}</span>
                             )}
                           </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {c.fornecedor_nome}
-                          </p>
+                          {c.fornecedor_nome && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {c.fornecedor_nome}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>

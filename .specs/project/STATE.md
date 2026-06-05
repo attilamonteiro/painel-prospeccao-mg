@@ -31,5 +31,15 @@
 - Idioma: PT-BR.
 - Tarefas leves (validação, tipos, formatação, testes triviais) → modelos mais baratos (Haiku/Sonnet).
 
+## Progresso (2026-06-05)
+- **T1-T3** fundação: commit `156a8a4`. **T4-T10** features+polish: commit `7b640ed`.
+- **3 Dynamic Workflows**: #1 fundação (6 agentes), #2 features+verificação adversarial (6 agentes), #3 review final 3-lentes.
+- **Gates verdes**: lint 0, typecheck 0, build 0 (proxy ativo, sem deprecation), 28 testes, zero `supabase.from()`.
+- **Runtime verificado**: dev server :3100, `/login` renderiza sem erro de console (redirect chain + proxy + providers + shadcn OK).
+- `middleware.ts` → `proxy.ts` (Next 16). Filtros com isLoading/isError. SearchInput sem set-state-in-effect.
+- **PENDENTE (você)**: T0 aplicar SQL no Supabase + criar usuário em Auth + crawler popular dados → ver dados reais.
+- **Review final + fixes (workflows #3/#4)**: schemas Zod alinhados ao SQL (nullabilidade real, `categorias` é TEXT no export), tipos via `z.infer` (drift eliminado), `formatBRL` null-safe, CSV formatado (BRL/datas — EXP-1), logout na UI (AUTH-3), error boundaries `error.tsx`/`global-error.tsx` (QUAL-2), `getUser()` no AuthProvider + defense-in-depth (`getUser` no layout `(app)` → rotas autenticadas viram dinâmicas).
+- Deferida (não-bloqueante, baixo risco): validação Zod do envelope de `export_orgaos`; `generateCSV` genérico; unificar `get_filter_options` duplicado (filterService vs contratosService).
+
 ## Deferred
 - Testes de componente (RTL + jsdom) adiados; por ora apenas testes de função pura (formatters, csv, zod).

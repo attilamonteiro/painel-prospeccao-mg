@@ -18,6 +18,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          // request.cookies only accepts (name, value) — options are not supported
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )

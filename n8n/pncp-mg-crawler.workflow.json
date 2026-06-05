@@ -1,0 +1,52 @@
+{
+  "name": "PNCP → Supabase | Órgãos/Secretarias MG",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Disparar",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Transformação pura PNCP → linhas das tabelas `orgaos` / `contratos`.\n// SEM rede aqui: recebe contratações cruas do PNCP e devolve as linhas prontas.\n// Este módulo é a ÚNICA fonte da verdade da transformação — o dry-run (node) o\n// importa e o build do workflow n8n embute o mesmo código no Code node.\n\nconst ESFERA = { F: 'FEDERAL', E: 'ESTADUAL', M: 'MUNICIPAL', D: 'DISTRITAL' };\nconst PODER = { E: 'EXECUTIVO', L: 'LEGISLATIVO', J: 'JUDICIARIO' };\n\nfunction formatarCnpj(raw) {\n  const d = String(raw || '').replace(/\\D/g, '');\n  if (d.length !== 14) return null;\n  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;\n}\n\nfunction dataISO(s) {\n  if (!s) return null;\n  const d = String(s).slice(0, 10);\n  return /^\\d{4}-\\d{2}-\\d{2}$/.test(d) ? d : null;\n}\n\n// Classifica o objeto da compra em categorias amplas (para o dashboard / filtros).\nfunction classificarCategorias(objeto) {\n  const o = String(objeto || '').toLowerCase();\n  const regras = [\n    [/aliment|merenda|g[êe]nero aliment|hortifrut|p[ãa]o|carne|leite/, 'Alimentação'],\n    [/sa[úu]de|hospital|m[ée]dic|medicament|farm[áa]c|odontol|enfermag|ambul[âa]nci/, 'Saúde'],\n    [/educa|escola|ensino|did[áa]tic|creche|uniforme escolar|pedag/, 'Educação'],\n    [/obra|pavimenta|constru|reforma|engenharia|asfalt|drenagem/, 'Obras'],\n    [/transporte|ve[íi]culo|combust[íi]vel|pneu|frota|loca[çc][ãa]o de ve/, 'Transporte'],\n    [/tecnologia|software|inform[áa]tica|sistema|computador|licen[çc]a de uso|ti\\b/, 'Tecnologia'],\n    [/limpeza|higiene|coleta|res[íi]duo|conserva[çc][ãa]o|jardinag/, 'Limpeza e Conservação'],\n    [/material|expediente|escrit[óo]rio|m[óo]vel|mobili[áa]rio/, 'Materiais'],\n    [/energia|ilumina[çc][ãa]o|el[ée]tric/, 'Energia'],\n    [/consult|assessor|servi[çc]o/, 'Serviços'],\n  ];\n  const cats = [];\n  for (const [re, cat] of regras) if (re.test(o)) cats.push(cat);\n  return cats.length ? [...new Set(cats)] : ['Outros'];\n}\n\n// Recebe um array de contratações cruas (campo `data[]` do PNCP) e devolve\n// { orgaos, contratos } — órgãos deduplicados por CNPJ com agregados, e\n// contratos deduplicados por numeroControlePNCP.\nfunction construirLinhas(contratacoes, { uf = 'MG' } = {}) {\n  const orgaos = new Map();\n  const contratos = new Map();\n\n  for (const c of contratacoes) {\n    const oe = c.orgaoEntidade || {};\n    const uo = c.unidadeOrgao || {};\n    const cnpj = formatarCnpj(oe.cnpj);\n    if (!cnpj) continue;\n\n    const valor = Number(c.valorTotalHomologado ?? c.valorTotalEstimado ?? 0) || 0;\n    const dataPub = dataISO(c.dataPublicacaoPncp);\n    const cats = classificarCategorias(c.objetoCompra);\n\n    if (!orgaos.has(cnpj)) {\n      orgaos.set(cnpj, {\n        cnpj,\n        razao_social: oe.razaoSocial || null,\n        nome_fantasia: uo.nomeUnidade || null,\n        esfera: ESFERA[oe.esferaId] || null,\n        poder: PODER[oe.poderId] || null,\n        uf: uo.ufSigla || uf,\n        municipio: uo.municipioNome || null,\n        codigo_ibge: uo.codigoIbge || null,\n        codigo_pncp: null,\n        site_oficial: null,\n        email_geral: null,\n        email_licitacoes: null,\n        telefone: null,\n        endereco: null,\n        cep: null,\n        nome_responsavel: null,\n        cargo_responsavel: null,\n        email_responsavel: null,\n        total_contratos: 0,\n        valor_total_contratos: 0,\n        ultimo_contrato_em: null,\n        categorias_compra: [],\n        fonte: 'PNCP',\n        _cats: new Set(),\n      });\n    }\n    const row = orgaos.get(cnpj);\n    row.total_contratos += 1;\n    row.valor_total_contratos += valor;\n    if (dataPub && (!row.ultimo_contrato_em || dataPub > row.ultimo_contrato_em)) {\n      row.ultimo_contrato_em = dataPub;\n    }\n    cats.forEach((x) => row._cats.add(x));\n\n    const ncp = c.numeroControlePNCP;\n    if (ncp && !contratos.has(ncp)) {\n      contratos.set(ncp, {\n        numero_controle_pncp: ncp,\n        orgao_cnpj: cnpj,\n        numero: c.numeroCompra || null,\n        objeto: c.objetoCompra || null,\n        modalidade: c.modalidadeNome || null,\n        valor_inicial: c.valorTotalEstimado ?? null,\n        valor_final: c.valorTotalHomologado ?? null,\n        data_assinatura: dataPub,\n        data_vigencia_inicio: dataISO(c.dataAberturaProposta),\n        data_vigencia_fim: dataISO(c.dataEncerramentoProposta),\n        fornecedor_cnpj: null,\n        fornecedor_nome: null,\n        categoria: cats[0] || null,\n      });\n    }\n  }\n\n  const orgaosArr = [...orgaos.values()].map((o) => {\n    o.categorias_compra = [...o._cats];\n    delete o._cats;\n    o.valor_total_contratos = Math.round(o.valor_total_contratos * 100) / 100;\n    return o;\n  });\n\n  return { orgaos: orgaosArr, contratos: [...contratos.values()] };\n}\n\n// ===================== CONFIGURAÇÃO =====================\nconst UF = 'MG';\nconst MODALIDADES = [6, 8];   // 6=Pregão Eletrônico, 8=Dispensa. Amplie: 4,5 (Concorrência), 7 (Pregão Presencial), 9 (Inexigibilidade), 12 (Credenciamento).\nconst DIAS_JANELA = 90;       // coleta por DATA DE PUBLICAÇÃO (snapshot do período)\nconst TAM_PAGINA = 50;\nconst MAX_PAGINAS = 60;       // trava de segurança por modalidade\nconst ENRIQUECER = true;      // BrasilAPI: email/telefone/endereço/CEP por CNPJ\nconst ENRIQUECER_MAX = 200;   // teto de chamadas de enriquecimento por execução\nconst LOTE = 500;             // tamanho do lote no upsert do Supabase\n\nconst SUPABASE_URL = ($env.SUPABASE_URL || 'https://afzjhphumlqoosgmkirb.supabase.co').replace(/\\/+$/, '');\nconst SERVICE_ROLE = $env.SUPABASE_SERVICE_ROLE_KEY;\nif (!SERVICE_ROLE) throw new Error('Defina a variável de ambiente SUPABASE_SERVICE_ROLE_KEY no n8n (Settings → Variables ou .env do servidor).');\n\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst dataFinal = $now.toFormat('yyyyLLdd');\nconst dataInicial = $now.minus({ days: DIAS_JANELA }).toFormat('yyyyLLdd');\n\n// ---------- 1. Coleta paginada no PNCP (filtro uf=MG server-side) ----------\nconst BASE = 'https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao';\nconst todas = [];\nfor (const mod of MODALIDADES) {\n  let pagina = 1, totalPaginas = 1;\n  do {\n    let resp;\n    try {\n      resp = await http({\n        method: 'GET', url: BASE, json: true,\n        qs: { dataInicial, dataFinal, codigoModalidadeContratacao: mod, uf: UF, pagina, tamanhoPagina: TAM_PAGINA },\n      });\n    } catch (e) { break; } // 204/400 em janela vazia: passa para a próxima modalidade\n    if (!resp || !resp.data || resp.data.length === 0) break;\n    todas.push(...resp.data);\n    totalPaginas = resp.totalPaginas || 1;\n    pagina++;\n  } while (pagina <= totalPaginas && pagina <= MAX_PAGINAS);\n}\n\n// ---------- 2. Transformação (idêntica ao dry-run) ----------\nconst { orgaos, contratos } = construirLinhas(todas, { uf: UF });\n\n// ---------- 3. Enriquecimento de contato (BrasilAPI) ----------\nif (ENRIQUECER) {\n  let n = 0;\n  for (const o of orgaos) {\n    if (n >= ENRIQUECER_MAX) break;\n    n++;\n    try {\n      const cnpjDigits = o.cnpj.replace(/\\D/g, '');\n      const d = await http({ method: 'GET', url: 'https://brasilapi.com.br/api/cnpj/v1/' + cnpjDigits, json: true });\n      o.email_geral = d.email || o.email_geral;\n      o.telefone = d.ddd_telefone_1 || o.telefone;\n      if (d.cep) o.cep = String(d.cep).replace(/(\\d{5})(\\d{3})/, '$1-$2');\n      o.endereco = [d.descricao_tipo_de_logradouro, d.logradouro, d.numero, d.bairro].filter(Boolean).join(' ') || o.endereco;\n      if (d.nome_fantasia) o.nome_fantasia = d.nome_fantasia;\n    } catch (e) { /* 429/404: segue */ }\n  }\n}\n\n// ---------- 4. Upsert no Supabase (PostgREST, service_role, em lotes) ----------\nasync function upsert(tabela, linhas, onConflict) {\n  for (let i = 0; i < linhas.length; i += LOTE) {\n    const lote = linhas.slice(i, i + LOTE);\n    if (!lote.length) continue;\n    await http({\n      method: 'POST',\n      url: SUPABASE_URL + '/rest/v1/' + tabela + '?on_conflict=' + onConflict,\n      headers: {\n        apikey: SERVICE_ROLE,\n        Authorization: 'Bearer ' + SERVICE_ROLE,\n        'Content-Type': 'application/json',\n        Prefer: 'resolution=merge-duplicates,return=minimal',\n      },\n      body: lote, json: true,\n    });\n  }\n}\n\nawait upsert('orgaos', orgaos, 'cnpj');                          // órgãos primeiro (FK)\nawait upsert('contratos', contratos, 'numero_controle_pncp');\n\nreturn [{ json: {\n  ok: true,\n  janela: dataInicial + '–' + dataFinal,\n  contratacoes_coletadas: todas.length,\n  orgaos_upsertados: orgaos.length,\n  contratos_upsertados: contratos.length,\n} }];\n"
+      },
+      "id": "crawler-pncp",
+      "name": "Coletar PNCP + gravar no Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Disparar": {
+      "main": [
+        [
+          {
+            "node": "Coletar PNCP + gravar no Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateId": "pncp-mg-crawler"
+  }
+}

@@ -31,9 +31,9 @@ const COLUMNS: DataTableColumn<Contrato>[] = [
     render: (row) => (
       <span
         className="block max-w-[240px] truncate"
-        title={row.objeto}
+        title={row.objeto ?? '—'}
       >
-        {row.objeto}
+        {row.objeto ?? '—'}
       </span>
     ),
   },
@@ -45,9 +45,9 @@ const COLUMNS: DataTableColumn<Contrato>[] = [
     render: (row) => (
       <span
         className="block max-w-[180px] truncate"
-        title={row.orgao_nome ?? row.orgao_cnpj}
+        title={row.orgao_nome ?? row.orgao_cnpj ?? '—'}
       >
-        {row.orgao_nome ?? row.orgao_cnpj}
+        {row.orgao_nome ?? row.orgao_cnpj ?? '—'}
       </span>
     ),
   },
@@ -68,7 +68,7 @@ const COLUMNS: DataTableColumn<Contrato>[] = [
     className: 'text-right',
     render: (row) => (
       <span className="block text-right tabular-nums">
-        {formatBRL(row.valor_final)}
+        {formatBRL(row.valor_final ?? null)}
       </span>
     ),
   },
@@ -86,9 +86,9 @@ const COLUMNS: DataTableColumn<Contrato>[] = [
     render: (row) => (
       <span
         className="block max-w-[180px] truncate"
-        title={row.fornecedor_nome}
+        title={row.fornecedor_nome ?? '—'}
       >
-        {row.fornecedor_nome}
+        {row.fornecedor_nome ?? '—'}
       </span>
     ),
   },

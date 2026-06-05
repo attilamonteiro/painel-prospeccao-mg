@@ -1,7 +1,9 @@
 /**
  * Formata um valor numérico em BRL (R$) usando Intl pt-BR.
+ * Retorna '—' para null ou undefined. formatBRL(0) retorna 'R$ 0,00'.
  */
-export function formatBRL(value: number): string {
+export function formatBRL(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—';
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',

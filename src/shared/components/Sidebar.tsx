@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Building2,
   FileText,
   Menu,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { useAuth } from '@/features/auth/hooks/useAuth';
 
 interface NavItem {
   href: string;
@@ -60,15 +62,35 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarContent() {
+  const { signOut } = useAuth();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace('/login');
+  }
+
   return (
-    <div className="flex flex-col gap-6 py-6">
-      <div className="px-6">
-        <h2 className="text-sm font-semibold text-foreground">
-          Prospecção MG
-        </h2>
-        <p className="text-xs text-muted-foreground">Setor Público</p>
+    <div className="flex flex-col justify-between h-full py-6">
+      <div className="flex flex-col gap-6">
+        <div className="px-6">
+          <h2 className="text-sm font-semibold text-foreground">
+            Prospecção MG
+          </h2>
+          <p className="text-xs text-muted-foreground">Setor Público</p>
+        </div>
+        <NavLinks />
       </div>
-      <NavLinks />
+      <div className="px-3">
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          onClick={handleSignOut}
+        >
+          <LogOut className="size-4 shrink-0" />
+          Sair
+        </Button>
+      </div>
     </div>
   );
 }

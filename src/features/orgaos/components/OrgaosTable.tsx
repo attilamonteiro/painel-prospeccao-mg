@@ -71,7 +71,7 @@ export function OrgaosTable({
       header: 'Esfera',
       sortable: true,
       render: (row) => (
-        <Badge variant={ESFERA_VARIANT[row.esfera] ?? 'outline'}>
+        <Badge variant={(row.esfera ? ESFERA_VARIANT[row.esfera] : undefined) ?? 'outline'}>
           {row.esfera}
         </Badge>
       ),
@@ -99,14 +99,14 @@ export function OrgaosTable({
       header: 'Categorias',
       render: (row) => (
         <div className="flex flex-wrap gap-1">
-          {row.categorias_compra.slice(0, 3).map((cat) => (
+          {(row.categorias_compra ?? []).slice(0, 3).map((cat) => (
             <Badge key={cat} variant="outline" className="text-[10px]">
               {cat}
             </Badge>
           ))}
-          {row.categorias_compra.length > 3 && (
+          {(row.categorias_compra ?? []).length > 3 && (
             <Badge variant="outline" className="text-[10px]">
-              +{row.categorias_compra.length - 3}
+              +{(row.categorias_compra ?? []).length - 3}
             </Badge>
           )}
         </div>

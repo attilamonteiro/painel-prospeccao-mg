@@ -1,5 +1,9 @@
 /**
  * Zod schemas for Orgao (Public Agency) domain
+ * Nullability aligned with SQL (0001_init_rpc_schema.sql):
+ *   NOT NULL: id, cnpj, total_contratos, valor_total_contratos, criado_em, atualizado_em
+ *   uf is always 'MG' — kept as non-nullable string
+ *   Everything else is nullable
  */
 
 import { z } from 'zod';
@@ -9,13 +13,13 @@ import { ContratoSchema } from './contrato';
 export const OrgaoSchema = z.object({
   id: z.number().int().positive(),
   cnpj: z.string().min(1),
-  razao_social: z.string().min(1),
-  nome_fantasia: z.string().min(1),
-  esfera: z.enum(['MUNICIPAL', 'ESTADUAL', 'FEDERAL']),
-  poder: z.string().min(1),
+  razao_social: z.string().nullable(),
+  nome_fantasia: z.string().nullable(),
+  esfera: z.enum(['MUNICIPAL', 'ESTADUAL', 'FEDERAL']).nullable(),
+  poder: z.string().nullable(),
   uf: z.string().min(1),
-  municipio: z.string().min(1),
-  codigo_ibge: z.string().min(1),
+  municipio: z.string().nullable(),
+  codigo_ibge: z.string().nullable(),
   site_oficial: z.string().nullable(),
   email_geral: z.string().nullable(),
   email_licitacoes: z.string().nullable(),
@@ -28,7 +32,7 @@ export const OrgaoSchema = z.object({
   total_contratos: z.number().int().nonnegative(),
   valor_total_contratos: z.number().nonnegative(),
   ultimo_contrato_em: z.string().nullable(),
-  categorias_compra: z.array(z.string()),
+  categorias_compra: z.array(z.string()).nullable(),
   criado_em: z.string(),
   atualizado_em: z.string(),
 });
@@ -40,12 +44,13 @@ export const OrgaoDetailSchema = z.object({
   contratos: z.array(ContratoSchema),
 });
 
+// export_orgaos returns categorias as TEXT (array_to_string), not an array
 export const OrgaoExportSchema = z.object({
-  municipio: z.string().min(1),
+  municipio: z.string().nullable(),
   uf: z.string().min(1),
-  razao_social: z.string().min(1),
-  nome_fantasia: z.string().min(1),
-  esfera: z.string().min(1),
+  razao_social: z.string().nullable(),
+  nome_fantasia: z.string().nullable(),
+  esfera: z.string().nullable(),
   cnpj: z.string().min(1),
   email_geral: z.string().nullable(),
   email_licitacoes: z.string().nullable(),
@@ -57,5 +62,5 @@ export const OrgaoExportSchema = z.object({
   total_contratos: z.number().int().nonnegative(),
   valor_total_contratos: z.number().nonnegative(),
   ultimo_contrato_em: z.string().nullable(),
-  categorias: z.array(z.string()),
+  categorias: z.string().nullable(),
 });

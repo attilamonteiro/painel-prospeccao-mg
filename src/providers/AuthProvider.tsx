@@ -32,8 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setState({ session, user: session?.user ?? null, isLoading: false });
+    // getUser() valida o token via round-trip ao servidor (mais seguro que getSession()).
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setState({ session: null, user, isLoading: false });
     });
 
     const {

@@ -3,6 +3,7 @@
 import { toast } from 'sonner';
 import { ExportButton } from '@/shared/components/ExportButton';
 import { generateCSV, downloadCSV } from '@/shared/lib/csv';
+import { formatBRL, formatDate } from '@/shared/lib/formatters';
 import { orgaosService } from '../lib/orgaosService';
 import type { OrgaoFilters } from '@/shared/types/orgao';
 
@@ -47,7 +48,9 @@ export function OrgaoExport({ filters }: OrgaoExportProps) {
 
       const csvRows = rows.map((r) => ({
         ...r,
-        categorias: r.categorias.join(', '),
+        categorias: r.categorias ?? '',
+        valor_total_contratos: formatBRL(r.valor_total_contratos),
+        ultimo_contrato_em: formatDate(r.ultimo_contrato_em),
       })) as Record<string, unknown>[];
 
       const content = generateCSV(csvRows, CSV_HEADERS);
