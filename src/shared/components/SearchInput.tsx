@@ -20,11 +20,16 @@ export function SearchInput({
   className,
 }: SearchInputProps) {
   const [localValue, setLocalValue] = useState(value);
-  const debouncedValue = useDebounce(localValue, 400);
-
-  useEffect(() => {
+  // Sincroniza com mudancas externas de `value` (ex.: limpar filtros) durante o
+  // render — padrao "ajustar estado quando um prop muda", sem useEffect, evitando
+  // o cascading-render sinalizado pela regra react-hooks/set-state-in-effect.
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setLocalValue(value);
-  }, [value]);
+  }
+
+  const debouncedValue = useDebounce(localValue, 400);
 
   useEffect(() => {
     onChange(debouncedValue);

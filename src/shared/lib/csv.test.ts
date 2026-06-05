@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { downloadCSV, generateCSV } from './csv';
 
 const BOM = '﻿';
@@ -115,7 +115,6 @@ describe('downloadCSV', () => {
     const appendChildMock = vi.fn();
     const removeChildMock = vi.fn();
     const createElementMock = vi.fn().mockReturnValue(anchor);
-    const mockBlob = {};
 
     Object.defineProperty(globalThis, 'window', {
       value: {},
@@ -140,7 +139,7 @@ describe('downloadCSV', () => {
 
     // Blob precisa ser uma class/constructor válida
     class MockBlob {
-      constructor(_parts: unknown[], _opts?: unknown) {
+      constructor() {
         // intentionally empty
       }
     }

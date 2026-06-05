@@ -1,14 +1,15 @@
 import { type NextRequest } from 'next/server'
 import { updateSession } from '@/shared/lib/supabase/middleware'
 
-export async function middleware(request: NextRequest) {
+// Next 16: a convencao "middleware" foi renomeada para "proxy" (mesma capacidade).
+export async function proxy(request: NextRequest) {
   return updateSession(request)
 }
 
 export const config = {
   matcher: [
     /*
-     * Aplica o middleware a todas as rotas exceto:
+     * Aplica o proxy a todas as rotas exceto:
      * - _next/static  (arquivos estáticos)
      * - _next/image   (otimização de imagens)
      * - favicon.ico   (favicon)
