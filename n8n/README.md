@@ -44,8 +44,9 @@ Re-rodar **não duplica** (upsert por `cnpj` / `numero_controle_pncp`). Teste an
 2. Configure o segredo numa das formas (o workflow lê `$env`):
    - self-hosted: `SUPABASE_SERVICE_ROLE_KEY=...` (e opcional `SUPABASE_URL=...`) no `.env` do servidor n8n; ou
    - **n8n Variables** (Settings → Variables): crie `SUPABASE_SERVICE_ROLE_KEY`.
-   > Se sua instância bloqueia `$env` em nós, troque no Code node `$env.SUPABASE_SERVICE_ROLE_KEY`
-   > por uma credencial — mas **não** cole a chave dentro do JSON versionado.
+   > **n8n v2+ bloqueia `$env` no Code node por padrão** (`N8N_BLOCK_ENV_ACCESS_IN_NODE=true`).
+   > Suba o n8n com `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` para o Code node ler `$env.SUPABASE_SERVICE_ROLE_KEY`.
+   > Alternativa: troque no Code node por uma credencial — mas **não** cole a chave no JSON versionado.
 3. Clique **Execute Workflow**. A saída traz `{ contratacoes_coletadas, orgaos_upsertados, contratos_upsertados }`.
 4. Verifique no SQL Editor: `select count(*) from orgaos; select * from orgaos order by valor_total_contratos desc limit 5;`
 
