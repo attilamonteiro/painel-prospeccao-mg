@@ -12,7 +12,7 @@ import { paginatedSchema } from './common';
 export const ContratoSchema = z.object({
   id: z.number().int().positive(),
   numero_controle_pncp: z.string().nullable(),
-  orgao_cnpj: z.string().nullable(),
+  orgao_cnpj: z.string().nullable().optional(),
   numero: z.string().nullable(),
   objeto: z.string().nullable(),
   modalidade: z.string().nullable(),

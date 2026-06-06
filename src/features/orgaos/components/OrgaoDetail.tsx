@@ -26,8 +26,8 @@ export function OrgaoDetail({ cnpj, open, onClose }: OrgaoDetailProps) {
     queryKey: ['orgao-detail', cnpj],
     queryFn: () => orgaosService.getDetail(cnpj!),
     enabled: !!cnpj,
-    retry: (_, err) => {
-      return (err as Error).message !== 'not_found';
+    retry: (count, err) => {
+      return count < 3 && (err as Error).message !== 'not_found';
     },
   });
 
