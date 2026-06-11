@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: painel-prospeccao-mg
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /login
+    envVars:
+      # Node 24 roda o mcp-server (TypeScript) nativamente, sem build extra.
+      - key: NODE_VERSION
+        value: 24.11.0
+      # Supabase (chaves publicas — front e MCP server)
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      # Usuario authenticated que o MCP server usa (repassado via spawn)
+      - key: PAINEL_EMAIL
+        sync: false
+      - key: PAINEL_PASSWORD
+        sync: false
+      # Chat com IA — DeepSeek (ou troque por ANTHROPIC_API_KEY)
+      - key: DEEPSEEK_API_KEY
+        sync: false

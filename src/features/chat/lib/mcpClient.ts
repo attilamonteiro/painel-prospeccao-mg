@@ -1,12 +1,19 @@
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {
+  StdioClientTransport,
+  getDefaultEnvironment,
+} from '@modelcontextprotocol/sdk/client/stdio.js';
 
 /**
  * Client MCP do chat: a API route atua como host MCP, sobe o servidor
  * (mcp-server/server.ts) via stdio e consome suas tools. Singleton em
  * globalThis para sobreviver ao hot-reload do Next em dev e evitar um
  * processo filho por request.
+ *
+ * As credenciais do MCP server são repassadas via env do spawn (não via
+ * arquivo .env), para funcionar em runtime gerenciado (Render) onde só as
+ * variáveis de ambiente do serviço estão disponíveis.
  */
 const g = globalThis as unknown as { __painelMcp?: Promise<Client> };
 
@@ -15,6 +22,13 @@ async function createMcpClient(): Promise<Client> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [serverPath],
+    env: {
+      ...getDefaultEnvironment(),
+      SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+      SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+      PAINEL_EMAIL: process.env.PAINEL_EMAIL ?? '',
+      PAINEL_PASSWORD: process.env.PAINEL_PASSWORD ?? '',
+    },
   });
   const client = new Client({ name: 'painel-chat-host', version: '1.0.0' });
   await client.connect(transport);

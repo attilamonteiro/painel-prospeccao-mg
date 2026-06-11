@@ -18,12 +18,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { config as loadEnv } from "dotenv";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-loadEnv({ path: path.join(__dirname, ".env") });
+
+// dotenv é opcional: ao rodar standalone (Claude Desktop, CLI) carrega o
+// mcp-server/.env; quando spawnado pelo painel, as credenciais chegam via
+// env do processo pai, então a ausência do pacote/arquivo não é erro.
+try {
+  const { config: loadEnv } = await import("dotenv");
+  loadEnv({ path: path.join(__dirname, ".env") });
+} catch {
+  // dotenv não instalado (ex.: rodando com as deps da raiz) — segue com process.env
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
