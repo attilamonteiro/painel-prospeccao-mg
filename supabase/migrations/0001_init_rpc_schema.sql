@@ -75,7 +75,11 @@ CREATE INDEX IF NOT EXISTS idx_contratos_data       ON public.contratos(data_ass
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.fn_set_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   NEW.atualizado_em = NOW();
   RETURN NEW;
@@ -98,6 +102,9 @@ ALTER TABLE public.contratos ENABLE ROW LEVEL SECURITY;
 -- Sem policies de SELECT para roles normais = acesso negado via .from()
 
 -- Service role (n8n crawler) tem acesso total
+DROP POLICY IF EXISTS "service_role_orgaos"    ON public.orgaos;
+DROP POLICY IF EXISTS "service_role_contratos" ON public.contratos;
+
 CREATE POLICY "service_role_orgaos"
   ON public.orgaos FOR ALL
   TO service_role USING (true) WITH CHECK (true);
@@ -455,17 +462,35 @@ END;
 $$;
 
 -- ============================================================
--- 6. GRANTS — RPCs acessíveis por authenticated
+-- 6. GRANTS — Revogar PUBLIC default, conceder só a authenticated
 -- ============================================================
 
+-- PostgreSQL concede EXECUTE a PUBLIC por padrão em funções.
+-- anon herda de PUBLIC — precisa revogar de PUBLIC primeiro.
+REVOKE EXECUTE ON FUNCTION public.fn_set_updated_at()    FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.rls_auto_enable()      FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_dashboard_stats()  FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_filter_options()   FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_orgao_detail(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.list_orgaos(text,text,text,text,numeric,numeric,text,text,integer,integer)             FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.list_contratos(text,text,numeric,numeric,date,date,text,text,text,integer,integer)     FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.export_orgaos(text,text,text,text,numeric,numeric)                                     FROM PUBLIC;
+
+-- Conceder as 6 RPCs de dados apenas a authenticated
 GRANT EXECUTE ON FUNCTION public.get_dashboard_stats()   TO authenticated;
-GRANT EXECUTE ON FUNCTION public.list_orgaos             TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_orgao_detail         TO authenticated;
-GRANT EXECUTE ON FUNCTION public.list_contratos           TO authenticated;
-GRANT EXECUTE ON FUNCTION public.export_orgaos            TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_filter_options()     TO authenticated;
+GRANT EXECUTE ON FUNCTION public.list_orgaos(text,text,text,text,numeric,numeric,text,text,integer,integer)              TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_orgao_detail(text)  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.list_contratos(text,text,numeric,numeric,date,date,text,text,text,integer,integer)      TO authenticated;
+GRANT EXECUTE ON FUNCTION public.export_orgaos(text,text,text,text,numeric,numeric)                                      TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_filter_options()    TO authenticated;
 
 -- Revogar acesso direto às tabelas para anon e authenticated
 -- (SECURITY DEFINER nas RPCs executa como owner, bypassando RLS)
 REVOKE ALL ON public.orgaos    FROM anon, authenticated;
 REVOKE ALL ON public.contratos FROM anon, authenticated;
+
+-- Garantir acesso explícito ao service_role (crawler/n8n)
+GRANT ALL ON public.orgaos    TO service_role;
+GRANT ALL ON public.contratos TO service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
+
