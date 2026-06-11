@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // O MCP SDK spawna o servidor MCP como processo filho (stdio) — não deve ser bundlado.
+  serverExternalPackages: ['@modelcontextprotocol/sdk'],
 };
 
 export default nextConfig;

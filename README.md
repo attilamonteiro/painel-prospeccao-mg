@@ -1,5 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## MCP Server
+
+O projeto inclui um **servidor MCP (Model Context Protocol)** próprio em [`mcp-server/`](./mcp-server/README.md), que expõe os dados de licitações públicas de MG como ferramentas para LLMs — 5 tools, 1 resource e 1 prompt sobre as RPCs do Supabase, com o mesmo modelo de segurança do frontend (authenticated + RLS). O arquivo [`.mcp.json`](./.mcp.json) registra o servidor automaticamente para quem abrir o projeto no Claude Code.
+
+O protocolo é usado de ponta a ponta: o **chat com IA do próprio painel** (`/api/chat` + widget flutuante) atua como **host MCP** — conecta no servidor via stdio, descobre as tools com `tools/list` e faz a ponte para a Claude API com tool use. Requer `ANTHROPIC_API_KEY` no `.env.local`.
+
 ## Getting Started
 
 First, run the development server:
