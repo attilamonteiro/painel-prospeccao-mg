@@ -74,6 +74,46 @@ DIAS=90 MODALIDADES=6,8,4 node n8n/dry-run.mjs
 
 Depois de editar `lib/transform.mjs`, **regere o workflow**: `node n8n/build.mjs`.
 
+## Enriquecer contatos dos órgãos (workflow separado)
+
+Workflow dedicado que melhora os contatos dos órgãos **já existentes** no banco
+(o crawler popula órgãos+contratos; este preenche email/telefone/site que faltam).
+
+```
+orgaos sem contato  ──>  OpenCNPJ (email/tel/endereço)  ──>  BrasilAPI (fallback)
+                    ──>  deriva site_oficial do domínio do email institucional
+                    ──>  scraping do site (email_licitacoes, best-effort)  ──>  PATCH Supabase
+```
+
+| Arquivo | O quê |
+|---|---|
+| `enrich-contatos.workflow.json` | **Workflow do n8n** — importe este. |
+| `lib/enrich.mjs` | Lógica de enriquecimento (OpenCNPJ + BrasilAPI + scraping). |
+| `dry-run-enrich.mjs` | Testa contra o banco **sem gravar** (mostra a cobertura). |
+| `build-enrich.mjs` | Regera o `.workflow.json` a partir do `lib/enrich.mjs`. |
+
+**Fontes** (todas gratuitas, sem chave): [OpenCNPJ](https://api.opencnpj.org) (~100 req/min,
+motor primário) → [BrasilAPI](https://brasilapi.com.br) (fallback). O e-mail de **licitação**
+raramente está na Receita — vem do scraping do site oficial.
+
+**Cobertura medida** (amostra real de órgãos de MG, via `dry-run-enrich.mjs`):
+~50% ganham `email_geral`, ~40% ganham `site_oficial`, ~5% ganham `email_licitacoes`
+(scraping é best-effort: ~1/3 dos sites de prefeitura respondem — muitos têm TLS quebrado).
+Leva a cobertura de e-mail de ~5% (65/1245) para ~50% dos restantes.
+
+```powershell
+# Validar sem gravar (mostra o que preencheria):
+$env:SUPABASE_SERVICE_ROLE_KEY='...'; node n8n/dry-run-enrich.mjs 20
+# Regerar o workflow após editar lib/enrich.mjs:
+node n8n/build-enrich.mjs
+```
+
+No n8n: importe `enrich-contatos.workflow.json`, garanta `SUPABASE_SERVICE_ROLE_KEY`
+no `$env` (mesma config do crawler), clique **Execute**. Processa `LIMITE` (120) órgãos por
+execução — rode várias vezes até cobrir todos. Usa **PATCH** (só preenche o que falta, não
+sobrescreve). O site já mostra os campos (tela de órgãos / detalhe) — o enriquecimento aparece
+automaticamente. Para agendar, troque o **Disparar** por um **Schedule Trigger**.
+
 ## Decisões & limitações conhecidas
 
 - **Granularidade = órgão/prefeitura (CNPJ).** A tabela `orgaos` tem `cnpj` único, e cada
