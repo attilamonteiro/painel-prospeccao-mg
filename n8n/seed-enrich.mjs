@@ -2,7 +2,7 @@
 // Aplica a mesma lógica de lib/enrich.mjs e grava via PATCH no Supabase.
 //
 // Uso:  SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node seed-enrich.mjs
-import { enriquecerOrgao } from './lib/enrich.mjs';
+import { enriquecerOrgao, ehInstitucional } from './lib/enrich.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://afzjhphumlqoosgmkirb.supabase.co').replace(/\/+$/, '');
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -13,9 +13,14 @@ const SCRAPE = process.env.SCRAPE === '1'; // scraping OFF por padrão (lento, r
 
 if (!SERVICE_ROLE) { console.error('Defina SUPABASE_SERVICE_ROLE_KEY.'); process.exit(1); }
 
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 async function httpGet(url, timeoutMs = 10000) {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: { 'User-Agent': 'Mozilla/5.0 painel-mg-enrich' } });
+    const r = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      redirect: 'follow',
+      headers: { 'User-Agent': UA, Accept: 'text/html,application/json,*/*' },
+    });
     return { status: r.status, body: await r.text() };
   } catch { return { status: 0, body: '' }; }
 }
@@ -30,15 +35,28 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   let processados = 0, pulados = 0, alterados = 0, novoEmail = 0, novoTel = 0, novoSite = 0, novoLicit = 0;
 
-  for (let offset = 0; offset < total; offset += PAGINA) {
+  // Keyset por id (cursor): robusto a filtro mutável — ao preencher email,
+  // os processados saem do filtro, mas id>cursor garante avanço sem repetir/pular.
+  // ATUALIZAR=1: processa quem TEM email não-institucional e substitui pelo .gov.br do site.
+  const ATUALIZAR = process.env.ATUALIZAR === '1';
+  const filtro = ATUALIZAR ? '&email_geral=not.is.null'
+    : (process.env.SO_SEM_EMAIL === '1' ? '&email_geral=is.null' : '');
+  let cursor = 0;
+  for (;;) {
     const orgaos = await fetch(
-      `${SUPABASE_URL}/rest/v1/orgaos?select=cnpj,razao_social,site_oficial,email_geral,email_licitacoes,telefone,endereco,cep&order=id.asc&offset=${offset}&limit=${PAGINA}`,
+      `${SUPABASE_URL}/rest/v1/orgaos?select=id,cnpj,razao_social,municipio,uf,site_oficial,email_geral,email_licitacoes,telefone,endereco,cep${filtro}&id=gt.${cursor}&order=id.asc&limit=${PAGINA}`,
       { headers: sbHeaders },
     ).then((r) => r.json());
     if (!Array.isArray(orgaos) || !orgaos.length) break;
+    cursor = orgaos[orgaos.length - 1].id;
 
-    // pendentes (pula os já completos)
+    // pendentes
     const pendentes = orgaos.filter((o) => {
+      if (ATUALIZAR) {
+        // só os com email NÃO-institucional (candidatos a substituir pelo .gov.br)
+        if (ehInstitucional(o.email_geral)) { pulados++; return false; }
+        return true;
+      }
       const completo = o.email_geral && o.telefone && o.site_oficial && o.email_licitacoes;
       if (completo) pulados++;
       return !completo;
@@ -46,7 +64,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     const processarUm = async (o) => {
       let patch;
-      try { patch = await enriquecerOrgao(o, httpGet, { scrape: SCRAPE }); }
+      try { patch = await enriquecerOrgao(o, httpGet, { scrape: SCRAPE, preferirInstitucional: ATUALIZAR }); }
       catch { patch = {}; }
       processados++;
       if (!Object.keys(patch).length) return;
@@ -69,7 +87,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await Promise.all(pendentes.slice(i, i + CONC).map(processarUm));
       await sleep(PAUSA_MS);
     }
-    console.log(`[offset ${offset + orgaos.length}/${total}] processados=${processados} alterados=${alterados} (email+${novoEmail} tel+${novoTel} site+${novoSite} licit+${novoLicit}) pulados=${pulados}`);
+    console.log(`[id<=${cursor}] processados=${processados} alterados=${alterados} (email+${novoEmail} tel+${novoTel} site+${novoSite} licit+${novoLicit}) pulados=${pulados}`);
   }
 
   console.log(`\n=== FIM === processados=${processados} pulados=${pulados} alterados=${alterados}`);

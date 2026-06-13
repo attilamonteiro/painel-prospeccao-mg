@@ -49,6 +49,15 @@ export function classificarEmails(emails) {
   return { email_licitacoes: licit, email_geral: geral };
 }
 
+// Email institucional = domínio oficial de órgão público (.gov/.leg/.jus/.mp/.edu .br),
+// não genérico. É o que queremos preferir; o resto (gmail, terra, provedor antigo,
+// .com.br solto) costuma ser dado velho da Receita.
+export function ehInstitucional(email) {
+  if (!email) return false;
+  if (DOMINIOS_GENERICOS.test(email)) return false;
+  return /\.(gov|leg|jus|mp|edu)\.br$/i.test((email.split('@')[1] || ''));
+}
+
 // Se o e-mail for institucional (.gov.br/.edu.br/.leg.br e não genérico),
 // o domínio é o site oficial.
 export function siteDoEmail(email) {
@@ -58,6 +67,50 @@ export function siteDoEmail(email) {
   if (DOMINIOS_GENERICOS.test(email)) return null;
   if (!/\.(gov|edu|leg|jus|mp)\.br$/i.test(dom) && !/\.gov\.br$/i.test(dom)) return null;
   return 'https://' + dom.toLowerCase();
+}
+
+// Slug do município para o padrão de domínio de MG.
+export function slugMunicipio(m) {
+  return String(m || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z]/g, '');
+}
+
+// Heurística: prefeituras de MG seguem em geral {municipio}.mg.gov.br.
+// Candidato a validar via scraping (não grava sem confirmar que responde).
+export function siteHeuristicaMG(municipio, uf) {
+  if ((uf || '').toUpperCase() !== 'MG') return null;
+  const s = slugMunicipio(municipio);
+  if (!s || s.length < 3) return null;
+  return 'https://' + s + '.mg.gov.br';
+}
+
+// Domínios verificados ao vivo de órgãos estaduais/federais de MG cujo
+// domínio NÃO segue o padrão municipal (chutar erra — estes foram conferidos).
+const ORGAOS_CONHECIDOS = [
+  { re: /TRIBUNAL D[AE] JUSTICA/, dom: 'tjmg.jus.br' },
+  { re: /MINISTERIO PUBLICO|PROCURADORIA GERAL DE JUSTICA/, dom: 'mpmg.mp.br' },
+  { re: /ASSEMBLEIA LEGISLATIVA/, dom: 'almg.gov.br' },
+  { re: /UNIVERSIDADE FEDERAL DE MINAS GERAIS/, dom: 'ufmg.br' },
+  { re: /UNIVERSIDADE FEDERAL DE OURO PRETO/, dom: 'ufop.br' },
+  { re: /UNIVERSIDADE FEDERAL DO TRIANGULO/, dom: 'uftm.edu.br' },
+  { re: /FUNDACAO CLOVIS SALGADO/, dom: 'fcs.mg.gov.br' },
+  { re: /VALE DO SAO FRANCISCO|CODEVASF/, dom: 'codevasf.gov.br' },
+  { re: /MINISTERIO DA CIENCIA/, dom: 'mcti.gov.br' },
+];
+
+// Lista de URLs base candidatas para descobrir o site, por tipo de órgão.
+// Câmaras usam .mg.leg.br ou .cam.mg.gov.br; estaduais conhecidos têm domínio fixo.
+export function candidatosSite(orgao) {
+  const rs = (orgao.razao_social || '').toUpperCase();
+  const s = slugMunicipio(orgao.municipio);
+  const cands = [];
+  for (const k of ORGAOS_CONHECIDOS) if (k.re.test(rs)) cands.push('https://' + k.dom);
+  if (/CAMARA/.test(rs) && s.length >= 3) {
+    cands.push('https://' + s + '.mg.leg.br', 'https://' + s + '.cam.mg.gov.br');
+  }
+  const heur = siteHeuristicaMG(orgao.municipio, orgao.uf);
+  if (heur && /MUNICIPIO|PREFEITURA|SECRETARIA|DEPARTAMENTO|FUNDO/.test(rs)) cands.push(heur);
+  return [...new Set(cands)];
 }
 
 function telOpenCnpj(d) {
@@ -110,7 +163,7 @@ export async function buscarBrasilApi(cnpj, httpGet) {
 
 // --- Scraping do site oficial (best-effort) ---
 
-const PATHS_LICITACAO = ['', '/licitacoes', '/licitacao', '/compras', '/transparencia', '/contato'];
+const PATHS_LICITACAO = ['', '/contato', '/fale-conosco', '/licitacoes', '/transparencia', '/ouvidoria'];
 
 // Sites de prefeitura variam muito (TLS quebrado, exigem www, só http).
 // Descobre a base que responde 200 testando variantes da URL.
@@ -124,7 +177,7 @@ export async function resolverBase(site, httpGet) {
   ];
   for (const url of candidatas) {
     let r;
-    try { r = await httpGet(url, 7000); } catch { continue; }
+    try { r = await httpGet(url, 5000); } catch { continue; }
     if (r && r.status === 200 && r.body && r.body.length > 200) return { base: url, body: r.body };
   }
   return null;
@@ -155,15 +208,17 @@ export async function scrapeSite(site, httpGet, { maxPaths = 3 } = {}) {
     // se já achou um e-mail de licitação, para cedo
     if ([...emails].some((e) => PALAVRAS_LICITACAO.test(e))) break;
   }
-  if (emails.size === 0 && telefones.size === 0) return null;
-  const cls = classificarEmails([...emails]);
-  return { ...cls, telefones: [...telefones] };
+  if (emails.size === 0 && telefones.size === 0) return { base, email_licitacoes: null, email_geral: null, email_institucional: null, telefones: [] };
+  const todos = [...emails];
+  const cls = classificarEmails(todos);
+  const email_institucional = todos.find((e) => ehInstitucional(e)) || null;
+  return { base, ...cls, email_institucional, telefones: [...telefones] };
 }
 
 // --- Orquestração por órgão ---
 // orgao: { cnpj, site_oficial, email_geral, email_licitacoes, telefone }
 // Retorna um patch só com os campos que conseguiu preencher e que estavam vazios.
-export async function enriquecerOrgao(orgao, httpGet, { scrape = true } = {}) {
+export async function enriquecerOrgao(orgao, httpGet, { scrape = true, preferirInstitucional = false } = {}) {
   const patch = {};
   const faltaEmail = !orgao.email_geral;
   const faltaTel = !orgao.telefone;
@@ -181,17 +236,33 @@ export async function enriquecerOrgao(orgao, httpGet, { scrape = true } = {}) {
     if (!orgao.cep && cad.cep) patch.cep = cad.cep;
   }
 
-  // 3. site oficial: do banco, ou derivado do domínio do email institucional
+  // 3. site oficial: banco (confiável) → domínio do email institucional (confiável)
   const emailRef = orgao.email_geral || patch.email_geral || (cad && cad.email);
-  const site = orgao.site_oficial || siteDoEmail(emailRef);
-  if (site && !orgao.site_oficial) patch.site_oficial = site;
+  const siteConhecido = orgao.site_oficial || siteDoEmail(emailRef);
+  if (siteConhecido && !orgao.site_oficial) patch.site_oficial = siteConhecido;
 
-  // 4. scraping → email_licitacoes (best-effort)
-  if (scrape && site && !orgao.email_licitacoes) {
-    const s = await scrapeSite(site, httpGet);
-    if (s) {
-      if (s.email_licitacoes) patch.email_licitacoes = s.email_licitacoes;
-      else if (!patch.email_geral && s.email_geral) patch.email_geral = s.email_geral;
+  // candidatos para scraping: o site conhecido, ou a lista por tipo de órgão
+  // (município / câmara / estadual conhecido). Só grava site que responder.
+  const candidatos = siteConhecido ? [siteConhecido] : candidatosSite(orgao);
+  const faltaEmailApos = !orgao.email_geral && !patch.email_geral;
+  // email atual "ruim" = existe mas não é institucional (genérico/provedor antigo da Receita)
+  const emailRuim = orgao.email_geral && !ehInstitucional(orgao.email_geral);
+  const querScrape = faltaEmailApos || !orgao.email_licitacoes || (preferirInstitucional && emailRuim);
+
+  // 4. scraping → email_licitacoes / email_geral / site (best-effort).
+  if (scrape && candidatos.length && querScrape) {
+    for (const cand of candidatos) {
+      const s = await scrapeSite(cand, httpGet);
+      if (!s) continue; // não respondeu → próximo candidato
+      if (!orgao.site_oficial && !siteConhecido && s.base) patch.site_oficial = s.base;
+      if (s.email_licitacoes && !orgao.email_licitacoes) patch.email_licitacoes = s.email_licitacoes;
+      if (faltaEmailApos && s.email_geral) {
+        patch.email_geral = s.email_geral;
+      } else if (preferirInstitucional && emailRuim && s.email_institucional) {
+        // substitui o email velho/genérico pelo institucional encontrado no site
+        patch.email_geral = s.email_institucional;
+      }
+      break; // respondeu = site certo; para
     }
   }
 

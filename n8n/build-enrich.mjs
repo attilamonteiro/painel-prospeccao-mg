@@ -21,6 +21,8 @@ const wrapper = `
 const LIMITE     = 120;    // órgãos por execução (rode várias vezes até cobrir todos)
 const PAUSA_MS   = 600;    // pausa entre órgãos (rate limit OpenCNPJ ~100/min)
 const SCRAPE     = true;   // scraping do site para email_licitacoes (best-effort)
+const ATUALIZAR  = false;  // false: só preenche vazios. true: substitui email
+                           // não-institucional (gmail/provedor antigo) pelo .gov.br do site.
 
 const SUPABASE_URL = ($env.SUPABASE_URL || 'https://afzjhphumlqoosgmkirb.supabase.co').replace(/\\/+$/, '');
 const SERVICE_ROLE = $env.SUPABASE_SERVICE_ROLE_KEY;
@@ -39,11 +41,13 @@ const httpGet = async (url, timeoutMs = 10000) => {
   } catch (e) { return { status: 0, body: '' }; }
 };
 
-// 1. Busca órgãos que ainda faltam email_geral OU email_licitacoes.
+// 1. Busca órgãos. Preencher: faltam email/licitacao. Atualizar: têm email (filtra
+//    os não-institucionais no cliente, pois PostgREST não filtra isso facilmente).
+const sel = 'select=cnpj,razao_social,municipio,uf,site_oficial,email_geral,email_licitacoes,telefone,endereco,cep';
+const filtroQ = ATUALIZAR ? 'email_geral=not.is.null' : 'or=(email_geral.is.null,email_licitacoes.is.null)';
 const orgaos = await this.helpers.httpRequest({
   method: 'GET', json: true, headers: sbHeaders,
-  url: SUPABASE_URL + '/rest/v1/orgaos?select=cnpj,razao_social,site_oficial,email_geral,email_licitacoes,telefone,endereco,cep'
-     + '&or=(email_geral.is.null,email_licitacoes.is.null)&limit=' + LIMITE,
+  url: SUPABASE_URL + '/rest/v1/orgaos?' + sel + '&' + filtroQ + '&limit=' + LIMITE,
 });
 
 // 2. Dedup pelo CNPJ raiz (matriz/filiais compartilham contato) + loop.
@@ -54,9 +58,10 @@ for (const o of orgaos) {
   const raiz = cnpjRaiz(o.cnpj);
   if (vistos.has(raiz)) continue;
   vistos.add(raiz);
+  if (ATUALIZAR && ehInstitucional(o.email_geral)) continue; // já institucional
 
   let patch;
-  try { patch = await enriquecerOrgao(o, httpGet, { scrape: SCRAPE }); }
+  try { patch = await enriquecerOrgao(o, httpGet, { scrape: SCRAPE, preferirInstitucional: ATUALIZAR }); }
   catch (e) { patch = {}; }
 
   if (Object.keys(patch).length) {
